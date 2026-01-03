@@ -202,6 +202,105 @@
   font-weight: 600;
 }
 
+.report-card {
+  background: #fffdf8;
+  border-radius: 22px;
+  padding: 20px 22px 26px;
+  box-shadow: 0 16px 40px rgba(34, 39, 43, 0.08);
+  margin-bottom: 24px;
+}
+
+.report-header {
+  margin-bottom: 16px;
+}
+
+.report-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  margin-bottom: 16px;
+}
+
+.report-item {
+  background: #f8f4ee;
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+}
+
+.report-item strong {
+  font-size: 1.2rem;
+}
+
+.report-table .table-row {
+  grid-template-columns: 110px 160px 100px 110px 100px 1fr;
+}
+
+.report-subtitle {
+  margin-bottom: 12px;
+}
+
+.report-subtitle h3 {
+  margin-bottom: 4px;
+}
+
+.tranche-history {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.tranche-history-card {
+  background: #f8f4ee;
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.tranche-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.tranche-history-header div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tranche-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: #4f5b64;
+}
+
+.tranche-usage-list {
+  display: grid;
+  gap: 8px;
+}
+
+.tranche-usage {
+  display: grid;
+  grid-template-columns: 110px 160px 110px 120px 1.4fr 1fr;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.usage-formula {
+  color: #5a6670;
+  font-size: 0.85rem;
+}
+
+.pill-muted {
+  background: #dfe4ea;
+  color: #3c434a;
+}
+
 .file-header {
   display: flex;
   justify-content: space-between;

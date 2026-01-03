@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 function App() {
@@ -10,10 +10,12 @@ function App() {
   const [uploadResults, setUploadResults] = useState([])
   const [deleting, setDeleting] = useState('')
   const [tranches, setTranches] = useState([
-    { date: '', amount: '', rate: '' },
+    { key: 1, date: '', amount: '', rate: '', status: 'idle' },
   ])
   const [trancheError, setTrancheError] = useState('')
   const [trancheStatus, setTrancheStatus] = useState('')
+  const [report, setReport] = useState(null)
+  const nextTrancheKeyRef = useRef(2)
 
   const loadTransactions = async () => {
     setLoading(true)
@@ -107,16 +109,21 @@ function App() {
   }
 
   const addTranche = () => {
-    setTranches((current) => [...current, { date: '', amount: '', rate: '' }])
+    setTranches((current) => [
+      ...current,
+      { key: nextTrancheKeyRef.current, date: '', amount: '', rate: '', status: 'idle' },
+    ])
+    nextTrancheKeyRef.current += 1
   }
 
   const removeTranche = (index) => {
     setTranches((current) => current.filter((_, rowIndex) => rowIndex !== index))
   }
 
-  const submitTranches = async () => {
+  const calculateReport = async () => {
     setTrancheError('')
     setTrancheStatus('')
+    setReport(null)
     const payload = tranches
       .map((row) => ({
         date: row.date,
@@ -129,7 +136,7 @@ function App() {
       return
     }
     try {
-      const response = await fetch('/tranches', {
+      const response = await fetch('/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tranches: payload }),
@@ -138,7 +145,8 @@ function App() {
         throw new Error(`HTTP ${response.status}`)
       }
       const result = await response.json()
-      setTrancheStatus(`Accepted ${result.accepted || payload.length} tranches.`)
+      setReport(result)
+      setTrancheStatus('Report calculated.')
     } catch (err) {
       setTrancheError(err instanceof Error ? err.message : 'Unknown error')
     }
@@ -206,7 +214,10 @@ function App() {
             <span></span>
           </div>
           {tranches.map((row, index) => (
-            <div className="tranche-row" key={`tranche-${index}`}>
+            <div
+              className="tranche-row"
+              key={`tranche-${row.key}`}
+            >
               <input
                 type="date"
                 value={row.date}
@@ -237,13 +248,105 @@ function App() {
           ))}
         </div>
         <div className="tranche-actions">
-          <button className="button" onClick={submitTranches}>
-            Send tranches
+          <button className="button" onClick={calculateReport}>
+            Calculate
           </button>
           {trancheStatus && <span className="status-text">{trancheStatus}</span>}
           {trancheError && <span className="error-text">{trancheError}</span>}
         </div>
       </section>
+
+      {report && (
+        <section className="report-card">
+          <div className="report-header">
+            <div>
+              <p className="file-label">Report</p>
+              <h2>FX differences summary</h2>
+            </div>
+          </div>
+          {report.error ? (
+            <div className="panel panel-error">
+              <strong>Calculation error:</strong> {report.error}
+            </div>
+          ) : null}
+          <div className="report-grid">
+            <div className="report-item">
+              <span>Final PLN (gain/loss)</span>
+              <strong>{report.summary?.total_fx_difference?.toFixed?.(2) ?? report.summary?.total_fx_difference}</strong>
+            </div>
+            <div className="report-item">
+              <span>Total outflow</span>
+              <strong>{report.summary?.total_outflow?.toFixed?.(2) ?? report.summary?.total_outflow}</strong>
+            </div>
+            <div className="report-item">
+              <span>Total covered</span>
+              <strong>{report.summary?.total_covered?.toFixed?.(2) ?? report.summary?.total_covered}</strong>
+            </div>
+            <div className="report-item">
+              <span>Missing coverage</span>
+              <strong>{report.summary?.missing_coverage?.toFixed?.(2) ?? report.summary?.missing_coverage}</strong>
+            </div>
+          </div>
+          {report.warnings?.length ? (
+            <div className="panel panel-error">
+              <strong>Warnings:</strong>
+              <ul>
+                {report.warnings.map((warning, index) => (
+                  <li key={`warn-${index}`}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="report-subtitle">
+            <h3>Tranche usage history</h3>
+            <p>Outgoing transactions are grouped under the tranches they consumed.</p>
+          </div>
+          <div className="tranche-history">
+            {report.tranches?.map((tranche, index) => (
+              <div className="tranche-history-card" key={`tranche-${index}`}>
+                <div className="tranche-history-header">
+                  <div>
+                    <strong>{tranche.date}</strong>
+                    <span className="pill pill-muted">
+                      {tranche.source === 'statement' ? 'Statement tranche' : 'Manual tranche'}
+                    </span>
+                  </div>
+                  <span className="pill">
+                    Remaining {tranche.remaining?.toFixed?.(2) ?? tranche.remaining}
+                  </span>
+                </div>
+                <div className="tranche-history-meta">
+                  <span>Amount: {tranche.amount?.toFixed?.(2) ?? tranche.amount}</span>
+                  <span>Rate: {tranche.rate?.toFixed?.(4) ?? tranche.rate}</span>
+                  {tranche.source_note ? <span>{tranche.source_note}</span> : null}
+                </div>
+                  {tranche.usages?.length ? (
+                    <div className="tranche-usage-list">
+                      {tranche.usages.map((usage, usageIndex) => (
+                        <div className="tranche-usage" key={`usage-${usageIndex}`}>
+                          <span>{usage.transaction_date}</span>
+                          <span className="mono">{usage.transaction_ref || '—'}</span>
+                          <span>{usage.amount_used?.toFixed?.(2) ?? usage.amount_used}</span>
+                          <span>
+                            FX {usage.fx_difference?.toFixed?.(2) ?? usage.fx_difference}
+                          </span>
+                          <span className="usage-formula">
+                            ({usage.nbp_rate?.toFixed?.(4) ?? usage.nbp_rate} -{' '}
+                            {tranche.rate?.toFixed?.(4) ?? tranche.rate}) ×{' '}
+                            {usage.amount_used?.toFixed?.(2) ?? usage.amount_used}
+                          </span>
+                          <span>Remaining {usage.remaining?.toFixed?.(2) ?? usage.remaining}</span>
+                        </div>
+                      ))}
+                    </div>
+                ) : (
+                  <div className="muted">No outflows assigned yet.</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {uploadError && (
         <div className="panel panel-error">

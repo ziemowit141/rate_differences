@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -68,6 +69,67 @@ type trancheRequest struct {
 	Tranches []trancheInput `json:"tranches"`
 }
 
+type calculateRequest struct {
+	Tranches []trancheInput `json:"tranches"`
+}
+
+type reportSummary struct {
+	TotalFXDifference float64 `json:"total_fx_difference"`
+	TotalOutflow      float64 `json:"total_outflow"`
+	TotalCovered      float64 `json:"total_covered"`
+	MissingCoverage   float64 `json:"missing_coverage"`
+}
+
+type reportUsage struct {
+	TransactionDate string  `json:"transaction_date"`
+	TransactionRef  string  `json:"transaction_ref"`
+	AmountUsed      float64 `json:"amount_used"`
+	TrancheDate     string  `json:"tranche_date"`
+	TrancheRate     float64 `json:"tranche_rate"`
+	NbpRate         float64 `json:"nbp_rate"`
+	FXDifference    float64 `json:"fx_difference"`
+}
+
+type trancheUsageEntry struct {
+	TransactionDate string  `json:"transaction_date"`
+	TransactionRef  string  `json:"transaction_ref"`
+	AmountUsed      float64 `json:"amount_used"`
+	NbpRate         float64 `json:"nbp_rate"`
+	FXDifference    float64 `json:"fx_difference"`
+	Remaining       float64 `json:"remaining"`
+}
+
+type trancheReport struct {
+	Date       string              `json:"date"`
+	Rate       float64             `json:"rate"`
+	Amount     float64             `json:"amount"`
+	Remaining  float64             `json:"remaining"`
+	Usages     []trancheUsageEntry `json:"usages"`
+	Source     string              `json:"source"`
+	SourceNote string              `json:"source_note,omitempty"`
+}
+
+type reportTransaction struct {
+	Date        string        `json:"date"`
+	Reference   string        `json:"reference"`
+	Amount      float64       `json:"amount"`
+	NbpRate     float64       `json:"nbp_rate"`
+	FXTotalDiff float64       `json:"fx_total_diff"`
+	Usages      []reportUsage `json:"usages"`
+}
+
+type calculateResponse struct {
+	Summary        reportSummary       `json:"summary"`
+	Transactions   []reportTransaction `json:"transactions"`
+	Tranches       []trancheReport     `json:"tranches"`
+	UsedTranches   []trancheInput      `json:"used_tranches"`
+	AutoTranches   []trancheInput      `json:"auto_tranches"`
+	Warnings       []string            `json:"warnings"`
+	Error          string              `json:"error,omitempty"`
+	SourceFiles    []string            `json:"source_files"`
+	UncoveredDates map[string]float64  `json:"uncovered_dates"`
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "listen address")
 	flag.Parse()
@@ -80,7 +142,7 @@ func main() {
 	e.GET("/transactions", transactionsHandler)
 	e.POST("/upload", uploadHandler)
 	e.DELETE("/files/:base", deleteHandler)
-	e.POST("/tranches", tranchesHandler)
+	e.POST("/calculate", calculateHandler)
 
 	log.Printf("mt940 api listening on %s", *addr)
 	if err := e.Start(*addr); err != nil {
@@ -276,20 +338,35 @@ func parseTransactions(raw []map[string]interface{}) []transactionView {
 	return transactions
 }
 
-func tranchesHandler(c echo.Context) error {
-	var req trancheRequest
+func calculateHandler(c echo.Context) error {
+	var req calculateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.String(http.StatusBadRequest, "invalid json body")
 	}
-	if len(req.Tranches) == 0 {
-		return c.String(http.StatusBadRequest, "no tranches provided")
-	}
 	for _, tranche := range req.Tranches {
-		log.Printf("tranche: date=%s amount=%.2f rate=%.6f", tranche.Date, tranche.Amount, tranche.Rate)
+		if !datePattern.MatchString(tranche.Date) {
+			return c.String(http.StatusBadRequest, "invalid tranche date")
+		}
+		if tranche.Amount <= 0 || tranche.Rate <= 0 {
+			return c.String(http.StatusBadRequest, "invalid tranche amount or rate")
+		}
 	}
-	return writeJSON(c, map[string]any{
-		"accepted": len(req.Tranches),
+
+	files, transactions, warnings := loadTransactionsFromDisk()
+	autoTranches := extractAutoTranches(transactions)
+	allTranches := append([]trancheInput{}, req.Tranches...)
+	allTranches = append(allTranches, autoTranches...)
+	sort.Slice(allTranches, func(i, j int) bool {
+		return allTranches[i].Date < allTranches[j].Date
 	})
+
+	report := buildReport(transactions, allTranches)
+	report.Warnings = append(report.Warnings, warnings...)
+	report.SourceFiles = files
+	report.AutoTranches = autoTranches
+	report.UsedTranches = allTranches
+
+	return writeJSON(c, report)
 }
 
 func deleteHandler(c echo.Context) error {
@@ -535,6 +612,234 @@ func fetchNBPRate(date string) nbpRateResult {
 		Mid:  payload.Rates[0].Mid,
 		Date: payload.Rates[0].EffectiveDate,
 	}
+}
+
+type parsedTxn struct {
+	Date      string
+	Amount    float64
+	DCMark    string
+	Reference string
+	Details   string
+}
+
+type trancheState struct {
+	Date       string
+	Amount     float64
+	Rate       float64
+	Source     string
+	SourceNote string
+	Original   float64
+	ReportIdx  int
+}
+
+func loadTransactionsFromDisk() ([]string, []parsedTxn, []string) {
+	dir := mt940Dir()
+	matches, err := filepath.Glob(filepath.Join(dir, "*.mt940"))
+	if err != nil {
+		return nil, nil, []string{"invalid mt940 pattern"}
+	}
+	sort.Strings(matches)
+
+	warnings := []string{}
+	transactions := []parsedTxn{}
+	for _, path := range matches {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to read %s: %v", path, err))
+			continue
+		}
+		message, err := parseMT940(data)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("failed to parse %s: %v", path, err))
+			continue
+		}
+		for _, txn := range parseTransactions(message.Transactions) {
+			date, err := parseValueDate(txn.ValueDate)
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("invalid date in %s: %v", path, err))
+				continue
+			}
+			amount, err := parseAmount(txn.Amount)
+			if err != nil {
+				warnings = append(warnings, fmt.Sprintf("invalid amount in %s: %v", path, err))
+				continue
+			}
+			transactions = append(transactions, parsedTxn{
+				Date:      date,
+				Amount:    amount,
+				DCMark:    txn.DCMark,
+				Reference: txn.Reference,
+				Details:   txn.Details,
+			})
+		}
+	}
+	return matches, transactions, warnings
+}
+
+func parseValueDate(raw string) (string, error) {
+	if len(raw) != 6 {
+		return "", fmt.Errorf("invalid value date")
+	}
+	year, err := parseYear(raw[0:2])
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%04d-%s-%s", year, raw[2:4], raw[4:6]), nil
+}
+
+func parseAmount(raw string) (float64, error) {
+	clean := strings.ReplaceAll(raw, ",", ".")
+	value, err := strconv.ParseFloat(clean, 64)
+	if err != nil {
+		return 0, err
+	}
+	return value, nil
+}
+
+func extractAutoTranches(transactions []parsedTxn) []trancheInput {
+	auto := []trancheInput{}
+	for _, txn := range transactions {
+		if txn.DCMark != "C" {
+			continue
+		}
+		upper := strings.ToUpper(txn.Details)
+		if strings.Contains(upper, "ROZL") || strings.Contains(upper, "FX") || strings.Contains(upper, "WALUT") {
+			auto = append(auto, trancheInput{
+				Date:   txn.Date,
+				Amount: txn.Amount,
+				Rate:   0,
+			})
+		}
+	}
+	return auto
+}
+
+func buildTrancheQueue(tranches []trancheInput, cache map[string]nbpRateResult, report *calculateResponse) []trancheState {
+	queue := make([]trancheState, 0, len(tranches))
+	for _, tranche := range tranches {
+		source := "manual"
+		if tranche.Rate == 0 {
+			source = "statement"
+			nbp := fetchNBPRateCached(cache, tranche.Date)
+			if nbp.Err != nil {
+				report.Warnings = append(report.Warnings, fmt.Sprintf("nbp %s: %v", tranche.Date, nbp.Err))
+			} else {
+				tranche.Rate = nbp.Mid
+			}
+		}
+		reportIndex := len(report.Tranches)
+		report.Tranches = append(report.Tranches, trancheReport{
+			Date:      tranche.Date,
+			Rate:      tranche.Rate,
+			Amount:    tranche.Amount,
+			Remaining: tranche.Amount,
+			Usages:    []trancheUsageEntry{},
+			Source:    source,
+		})
+		if source == "statement" {
+			report.Tranches[reportIndex].SourceNote = "auto from statement"
+		}
+		queue = append(queue, trancheState{
+			Date:       tranche.Date,
+			Amount:     tranche.Amount,
+			Rate:       tranche.Rate,
+			Source:     source,
+			SourceNote: report.Tranches[reportIndex].SourceNote,
+			Original:   tranche.Amount,
+			ReportIdx:  reportIndex,
+		})
+	}
+	return queue
+}
+
+func buildReport(transactions []parsedTxn, tranches []trancheInput) calculateResponse {
+	report := calculateResponse{
+		Transactions:   []reportTransaction{},
+		Warnings:       []string{},
+		UncoveredDates: map[string]float64{},
+		Tranches:       []trancheReport{},
+	}
+
+	nbpCache := map[string]nbpRateResult{}
+	queue := buildTrancheQueue(tranches, nbpCache, &report)
+
+	for _, txn := range transactions {
+		if txn.DCMark != "D" {
+			continue
+		}
+		rate := fetchNBPRateCached(nbpCache, txn.Date)
+		if rate.Err != nil {
+			report.Warnings = append(report.Warnings, fmt.Sprintf("nbp %s: %v", txn.Date, rate.Err))
+		}
+
+		remaining := txn.Amount
+		transactionReport := reportTransaction{
+			Date:        txn.Date,
+			Reference:   txn.Reference,
+			Amount:      txn.Amount,
+			NbpRate:     rate.Mid,
+			FXTotalDiff: 0,
+			Usages:      []reportUsage{},
+		}
+
+		for remaining > 0 && len(queue) > 0 {
+			current := &queue[0]
+			use := current.Amount
+			if use > remaining {
+				use = remaining
+			}
+			diff := 0.0
+			if current.Rate > 0 && rate.Mid > 0 {
+				diff = (rate.Mid - current.Rate) * use
+			}
+			transactionReport.Usages = append(transactionReport.Usages, reportUsage{
+				TransactionDate: txn.Date,
+				TransactionRef:  txn.Reference,
+				AmountUsed:      use,
+				TrancheDate:     current.Date,
+				TrancheRate:     current.Rate,
+				NbpRate:         rate.Mid,
+				FXDifference:    diff,
+			})
+			transactionReport.FXTotalDiff += diff
+
+			if current.ReportIdx >= 0 && current.ReportIdx < len(report.Tranches) {
+				entry := trancheUsageEntry{
+					TransactionDate: txn.Date,
+					TransactionRef:  txn.Reference,
+					AmountUsed:      use,
+					NbpRate:         rate.Mid,
+					FXDifference:    diff,
+					Remaining:       current.Amount - use,
+				}
+				report.Tranches[current.ReportIdx].Usages = append(report.Tranches[current.ReportIdx].Usages, entry)
+				report.Tranches[current.ReportIdx].Remaining = current.Amount - use
+			}
+
+			current.Amount -= use
+			remaining -= use
+			if current.Amount <= 0 {
+				queue = queue[1:]
+			}
+		}
+
+		if remaining > 0 {
+			report.Warnings = append(report.Warnings, fmt.Sprintf("missing tranche coverage for %s: %.2f", txn.Date, remaining))
+			report.UncoveredDates[txn.Date] += remaining
+		}
+
+		report.Summary.TotalFXDifference += transactionReport.FXTotalDiff
+		report.Summary.TotalOutflow += txn.Amount
+		report.Summary.TotalCovered += txn.Amount - remaining
+		report.Summary.MissingCoverage += remaining
+		report.Transactions = append(report.Transactions, transactionReport)
+	}
+
+	if report.Summary.MissingCoverage > 0 {
+		report.Error = "Missing tranche coverage. Please add tranches or statements to cover all outgoing transactions."
+	}
+
+	return report
 }
 
 func writeJSON(c echo.Context, payload any) error {

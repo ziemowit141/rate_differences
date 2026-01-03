@@ -59,6 +59,14 @@ Delete a statement by base name:
 curl -s -X DELETE http://localhost:8080/files/2025-01-07
 ```
 
+Calculate report (send tranches manually):
+
+```bash
+curl -s -X POST http://localhost:8080/calculate \
+  -H 'Content-Type: application/json' \
+  -d '{"tranches":[{"date":"2025-01-02","amount":10000,"rate":4.12}]}'
+```
+
 ## React UI
 
 ```bash

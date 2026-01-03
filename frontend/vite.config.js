@@ -9,7 +9,7 @@ export default defineConfig({
       '/transactions': 'http://localhost:8080',
       '/upload': 'http://localhost:8080',
       '/files': 'http://localhost:8080',
-      '/tranches': 'http://localhost:8080',
+      '/calculate': 'http://localhost:8080',
     },
   },
 })
