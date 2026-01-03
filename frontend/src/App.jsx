@@ -8,7 +8,6 @@ function App() {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
-  const [uploadResults, setUploadResults] = useState([])
   const [deleting, setDeleting] = useState('')
   const [tranches, setTranches] = useState([
     { key: 1, date: '', amount: '', rate: '', status: 'idle' },
@@ -141,7 +140,6 @@ function App() {
     if (!files.length) return
     setUploading(true)
     setUploadError('')
-    setUploadResults([])
     try {
       const formData = new FormData()
       files.forEach((file) => formData.append('files', file))
@@ -153,7 +151,6 @@ function App() {
         throw new Error(`HTTP ${response.status}`)
       }
       const payload = await response.json()
-      setUploadResults(payload.files || [])
       await loadTransactions()
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Unknown error')
@@ -474,26 +471,6 @@ function App() {
       {uploadError && (
         <div className="panel panel-error">
           <strong>Upload failed:</strong> {uploadError}
-        </div>
-      )}
-
-      {uploadResults.length > 0 && (
-        <div className="panel panel-upload">
-          <h3>Upload results</h3>
-          <ul>
-            {uploadResults.map((result) => (
-              <li key={result.source}>
-                <strong>{result.source}</strong>{' '}
-                {result.error ? (
-                  <span className="error-text">{result.error}</span>
-                ) : (
-                  <span>
-                    → {result.pdf_path} → {result.mt940_path}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
         </div>
       )}
 
