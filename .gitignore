@@ -9,5 +9,6 @@ build/
 .venv/
 venv/
 .swift-cache/
+.swift-bin/
 .DS_Store
 *.log
