@@ -51,6 +51,12 @@ curl -s -X POST http://localhost:8080/upload \
   -F 'files=@/path/to/statement2.pdf'
 ```
 
+Delete a statement by base name:
+
+```bash
+curl -s -X DELETE http://localhost:8080/files/2025-01-07
+```
+
 ## React UI
 
 ```bash

@@ -47,6 +47,17 @@
   color: #f8f0e6;
 }
 
+.button-tertiary {
+  background: transparent;
+  color: #1b1d1f;
+  border: 1px solid rgba(27, 29, 31, 0.2);
+}
+
+.button-tertiary:hover {
+  box-shadow: none;
+  transform: translateY(-1px);
+}
+
 .button:disabled {
   opacity: 0.6;
   cursor: wait;
@@ -137,6 +148,12 @@
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.file-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .file-label {

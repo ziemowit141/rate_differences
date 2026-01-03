@@ -35,6 +35,7 @@ type transactionView struct {
 
 type fileTransactions struct {
 	File         string            `json:"file"`
+	BaseName     string            `json:"base_name"`
 	Error        string            `json:"error,omitempty"`
 	Transactions []transactionView `json:"transactions,omitempty"`
 }
@@ -63,6 +64,7 @@ func main() {
 	e.GET("/health", healthHandler)
 	e.GET("/transactions", transactionsHandler)
 	e.POST("/upload", uploadHandler)
+	e.DELETE("/files/:base", deleteHandler)
 
 	log.Printf("mt940 api listening on %s", *addr)
 	if err := e.Start(*addr); err != nil {
@@ -97,7 +99,10 @@ func transactionsHandler(c echo.Context) error {
 
 	response := transactionsResponse{Files: make([]fileTransactions, 0, len(matches))}
 	for _, path := range matches {
-		result := fileTransactions{File: path}
+		result := fileTransactions{
+			File:     path,
+			BaseName: strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			result.Error = err.Error()
@@ -130,9 +135,9 @@ func uploadHandler(c echo.Context) error {
 	results := make([]uploadResult, 0, len(files))
 	for index, file := range files {
 		result := uploadResult{Source: file.Filename}
-		baseName := buildDateName(index)
-		pdfPath := filepath.Join(statementDir(), baseName+".pdf")
-		mt940Path := filepath.Join(mt940Dir(), baseName+".mt940")
+		tempBase := buildTempName(index)
+		pdfPath := filepath.Join(statementDir(), tempBase+".pdf")
+		mt940Path := filepath.Join(mt940Dir(), tempBase+".mt940")
 
 		if err := saveUploadedFile(file, pdfPath); err != nil {
 			result.Error = err.Error()
@@ -146,8 +151,22 @@ func uploadHandler(c echo.Context) error {
 			continue
 		}
 
-		result.PDFPath = pdfPath
-		result.MT940Path = mt940Path
+		finalBase := chooseStatementBase(mt940Path)
+		finalPDFPath := filepath.Join(statementDir(), finalBase+".pdf")
+		finalMT940Path := filepath.Join(mt940Dir(), finalBase+".mt940")
+		if err := os.Rename(pdfPath, finalPDFPath); err != nil {
+			result.Error = err.Error()
+			results = append(results, result)
+			continue
+		}
+		if err := os.Rename(mt940Path, finalMT940Path); err != nil {
+			result.Error = err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		result.PDFPath = finalPDFPath
+		result.MT940Path = finalMT940Path
 		results = append(results, result)
 	}
 
@@ -220,6 +239,42 @@ func parseTransactions(raw []map[string]interface{}) []transactionView {
 	return transactions
 }
 
+func deleteHandler(c echo.Context) error {
+	base := strings.TrimSpace(c.Param("base"))
+	if base == "" || strings.Contains(base, "/") || strings.Contains(base, "\\") {
+		return c.String(http.StatusBadRequest, "invalid base name")
+	}
+
+	pdfPath := filepath.Join(statementDir(), base+".pdf")
+	mt940Path := filepath.Join(mt940Dir(), base+".mt940")
+
+	wasPDF := fileExists(pdfPath)
+	wasMT940 := fileExists(mt940Path)
+
+	if err := removeIfExists(pdfPath); err != nil {
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+	if err := removeIfExists(mt940Path); err != nil {
+		return c.String(http.StatusInternalServerError, err.Error())
+	}
+
+	deleted := []string{}
+	if wasPDF {
+		deleted = append(deleted, pdfPath)
+	}
+	if wasMT940 {
+		deleted = append(deleted, mt940Path)
+	}
+	if len(deleted) == 0 {
+		return c.String(http.StatusNotFound, "file not found")
+	}
+
+	return writeJSON(c, map[string]any{
+		"base":    base,
+		"deleted": deleted,
+	})
+}
+
 func saveUploadedFile(file *multipart.FileHeader, dest string) error {
 	src, err := file.Open()
 	if err != nil {
@@ -253,12 +308,17 @@ func runConversion(pdfPath, mt940Path string) error {
 	return nil
 }
 
-func buildDateName(index int) string {
-	base := time.Now().Format("2006-01-02")
-	if index == 0 {
-		return uniqueName(base)
+func buildTempName(index int) string {
+	base := time.Now().Format("20060102-150405")
+	return fmt.Sprintf("upload-%s-%02d", base, index+1)
+}
+
+func chooseStatementBase(mt940Path string) string {
+	statementDate, err := extractStatementDate(mt940Path)
+	if err != nil {
+		statementDate = time.Now().Format("2006-01-02")
 	}
-	return uniqueName(fmt.Sprintf("%s-%02d", base, index+1))
+	return uniqueName(statementDate)
 }
 
 func uniqueName(base string) string {
@@ -281,6 +341,14 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+func removeIfExists(path string) error {
+	err := os.Remove(path)
+	if err == nil || os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
 func repoRoot() string {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -295,6 +363,56 @@ func statementDir() string {
 
 func mt940Dir() string {
 	return filepath.Join("cmd", "mt940api", "data", "mt940s")
+}
+
+func extractStatementDate(mt940Path string) (string, error) {
+	data, err := os.ReadFile(mt940Path)
+	if err != nil {
+		return "", err
+	}
+	message, err := parseMT940(data)
+	if err != nil {
+		return "", err
+	}
+	field, ok := message.Fields["F_62F"].(string)
+	if !ok || field == "" {
+		field, ok = message.Fields["F_60F"].(string)
+		if !ok || field == "" {
+			return "", fmt.Errorf("missing balance date")
+		}
+	}
+	date, err := parseMT940Date(field)
+	if err != nil {
+		return "", err
+	}
+	return date, nil
+}
+
+var balanceDatePattern = regexp.MustCompile(`^[CD](\d{6})`)
+
+func parseMT940Date(field string) (string, error) {
+	field = strings.TrimSpace(field)
+	matches := balanceDatePattern.FindStringSubmatch(field)
+	if matches == nil {
+		return "", fmt.Errorf("invalid balance field")
+	}
+	raw := matches[1]
+	year, err := parseYear(raw[0:2])
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%04d-%s-%s", year, raw[2:4], raw[4:6]), nil
+}
+
+func parseYear(raw string) (int, error) {
+	if len(raw) != 2 {
+		return 0, fmt.Errorf("invalid year")
+	}
+	year := (int(raw[0]-'0') * 10) + int(raw[1]-'0')
+	if year < 70 {
+		return 2000 + year, nil
+	}
+	return 1900 + year, nil
 }
 
 func writeJSON(c echo.Context, payload any) error {

@@ -8,6 +8,7 @@ function App() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [uploadResults, setUploadResults] = useState([])
+  const [deleting, setDeleting] = useState('')
 
   const loadTransactions = async () => {
     setLoading(true)
@@ -71,6 +72,25 @@ function App() {
 
   const handleDragOver = (event) => {
     event.preventDefault()
+  }
+
+  const handleDelete = async (baseName) => {
+    if (!baseName || deleting) return
+    setDeleting(baseName)
+    setError('')
+    try {
+      const response = await fetch(`/files/${encodeURIComponent(baseName)}`, {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      await loadTransactions()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setDeleting('')
+    }
   }
 
   useEffect(() => {
@@ -160,11 +180,20 @@ function App() {
               <div className="file-header">
                 <div>
                   <p className="file-label">Statement file</p>
-                  <h2>{file.file}</h2>
+                  <h2>{file.base_name || file.file}</h2>
                 </div>
-                <span className="pill">
-                  {file.transactions?.length ?? 0} transactions
-                </span>
+                <div className="file-actions">
+                  <span className="pill">
+                    {file.transactions?.length ?? 0} transactions
+                  </span>
+                  <button
+                    className="button button-tertiary"
+                    onClick={() => handleDelete(file.base_name)}
+                    disabled={deleting === file.base_name}
+                  >
+                    {deleting === file.base_name ? 'Deleting…' : 'Delete'}
+                  </button>
+                </div>
               </div>
               {file.error ? (
                 <div className="panel panel-error">{file.error}</div>
