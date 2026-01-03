@@ -32,6 +32,11 @@
   gap: 12px;
 }
 
+.lang-toggle {
+  display: flex;
+  gap: 6px;
+}
+
 .button {
   border: none;
   background: #f2a900;
@@ -56,6 +61,10 @@
 .button-tertiary:hover {
   box-shadow: none;
   transform: translateY(-1px);
+}
+
+.button-tertiary.active {
+  background: rgba(27, 29, 31, 0.12);
 }
 
 .button:disabled {

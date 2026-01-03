@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 function App() {
+  const [lang, setLang] = useState('pl')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -16,6 +17,99 @@ function App() {
   const [trancheStatus, setTrancheStatus] = useState('')
   const [report, setReport] = useState(null)
   const nextTrancheKeyRef = useRef(2)
+
+  const copy = {
+    pl: {
+      title: 'Kalkulator różnic kursowych',
+      subtitle:
+        'Wgraj wyciągi i uzupełnij transze. Program obliczy wynik końcowy i pokaże historię rozliczeń.',
+      upload: 'Wgraj PDF',
+      refresh: 'Odśwież',
+      dropTitle: 'Przeciągnij i upuść PDF',
+      dropText: 'Możesz dodać wiele wyciągów naraz.',
+      tranchesTitle: 'Transze',
+      tranchesSubtitle: 'Wprowadź transze zakupu waluty (data, kwota, kurs).',
+      addRow: 'Dodaj wiersz',
+      date: 'Data',
+      amount: 'Kwota',
+      rate: 'Kurs',
+      remove: 'Usuń',
+      calculate: 'Oblicz',
+      reportTitle: 'Raport',
+      summaryTitle: 'Podsumowanie różnic kursowych',
+      finalPln: 'Wynik końcowy (PLN)',
+      totalOutflow: 'Wydatki łącznie',
+      totalCovered: 'Pokryte wydatki',
+      missingCoverage: 'Brakujące pokrycie',
+      warnings: 'Ostrzeżenia',
+      trancheHistoryTitle: 'Historia rozliczeń transz',
+      trancheHistorySubtitle: 'Wydatki przypisane do transz (FIFO).',
+      manualTranche: 'Transza ręczna',
+      statementTranche: 'Transza z wyciągu',
+      remaining: 'Pozostało',
+      reportCalculated: 'Raport policzony.',
+      calcError: 'Błąd obliczeń',
+      statementFile: 'Wyciąg',
+      transactions: 'transakcji',
+      delete: 'Usuń',
+      dc: 'D/C',
+      code: 'Kod',
+      reference: 'Numer referencyjny',
+      valueDate: 'Data waluty',
+      entryDate: 'Data księg.',
+      details: 'Opis',
+      nbpUsd: 'NBP USD',
+      asOf: 'z dnia',
+      formulaLabel: 'Wzór',
+      fx: 'Różnica',
+    },
+    en: {
+      title: 'FX Differences Calculator',
+      subtitle:
+        'Upload statements and add tranches. The report shows the final result and allocation history.',
+      upload: 'Upload PDFs',
+      refresh: 'Refresh',
+      dropTitle: 'Drag & drop PDFs',
+      dropText: 'You can upload multiple statements at once.',
+      tranchesTitle: 'Tranches',
+      tranchesSubtitle: 'Enter currency purchase tranches (date, amount, rate).',
+      addRow: 'Add row',
+      date: 'Date',
+      amount: 'Amount',
+      rate: 'Rate',
+      remove: 'Remove',
+      calculate: 'Calculate',
+      reportTitle: 'Report',
+      summaryTitle: 'FX differences summary',
+      finalPln: 'Final PLN (gain/loss)',
+      totalOutflow: 'Total outflow',
+      totalCovered: 'Covered outflow',
+      missingCoverage: 'Missing coverage',
+      warnings: 'Warnings',
+      trancheHistoryTitle: 'Tranche usage history',
+      trancheHistorySubtitle: 'Outflows assigned to tranches (FIFO).',
+      manualTranche: 'Manual tranche',
+      statementTranche: 'Statement tranche',
+      remaining: 'Remaining',
+      reportCalculated: 'Report calculated.',
+      calcError: 'Calculation error',
+      statementFile: 'Statement',
+      transactions: 'transactions',
+      delete: 'Delete',
+      valueDate: 'Value date',
+      entryDate: 'Posting date',
+      dc: 'D/C',
+      code: 'Code',
+      reference: 'Reference',
+      details: 'Details',
+      nbpUsd: 'NBP USD',
+      asOf: 'as of',
+      formulaLabel: 'Formula',
+      fx: 'FX diff',
+    },
+  }
+
+  const t = copy[lang]
 
   const loadTransactions = async () => {
     setLoading(true)
@@ -156,13 +250,25 @@ function App() {
     <div className="app">
       <header className="app-header">
         <div>
-          <p className="eyebrow">MT940 Viewer</p>
-          <h1>Transactions from your statements</h1>
-          <p className="subhead">
-            This view pulls data from the Go API at <code>/transactions</code>.
-          </p>
+          <p className="eyebrow">FX Toolkit</p>
+          <h1>{t.title}</h1>
+          <p className="subhead">{t.subtitle}</p>
         </div>
         <div className="header-actions">
+          <div className="lang-toggle">
+            <button
+              className={`button button-tertiary ${lang === 'pl' ? 'active' : ''}`}
+              onClick={() => setLang('pl')}
+            >
+              PL
+            </button>
+            <button
+              className={`button button-tertiary ${lang === 'en' ? 'active' : ''}`}
+              onClick={() => setLang('en')}
+            >
+              EN
+            </button>
+          </div>
           <label className="upload">
             <input
               type="file"
@@ -172,11 +278,11 @@ function App() {
               disabled={uploading}
             />
             <span className="button button-secondary">
-              {uploading ? 'Uploading…' : 'Upload PDFs'}
+              {uploading ? 'Uploading…' : t.upload}
             </span>
           </label>
           <button className="button" onClick={loadTransactions} disabled={loading}>
-            {loading ? 'Refreshing…' : 'Refresh'}
+            {loading ? 'Refreshing…' : t.refresh}
           </button>
         </div>
       </header>
@@ -187,26 +293,26 @@ function App() {
         onDragOver={handleDragOver}
       >
         <div>
-          <h2>Drag & drop PDFs</h2>
-          <p>Drop multiple Citibank statements here or use the upload button.</p>
+          <h2>{t.dropTitle}</h2>
+          <p>{t.dropText}</p>
         </div>
       </section>
 
       <section className="tranche-card">
         <div className="tranche-header">
           <div>
-            <p className="file-label">Tranches</p>
-            <h2>Input tranches for FX calculations</h2>
+            <p className="file-label">{t.tranchesTitle}</p>
+            <h2>{t.tranchesSubtitle}</h2>
           </div>
           <button className="button button-secondary" onClick={addTranche}>
-            Add row
+            {t.addRow}
           </button>
         </div>
         <div className="tranche-table">
           <div className="tranche-row tranche-head">
-            <span>Date</span>
-            <span>Amount</span>
-            <span>Rate</span>
+            <span>{t.date}</span>
+            <span>{t.amount}</span>
+            <span>{t.rate}</span>
             <span></span>
           </div>
           {tranches.map((row, index) => (
@@ -222,28 +328,28 @@ function App() {
               <input
                 type="number"
                 step="0.01"
-                placeholder="Amount"
+                placeholder={t.amount}
                 value={row.amount}
                 onChange={(event) => updateTranche(index, 'amount', event.target.value)}
               />
               <input
                 type="number"
                 step="0.0001"
-                placeholder="Rate"
+                placeholder={t.rate}
                 value={row.rate}
                 onChange={(event) => updateTranche(index, 'rate', event.target.value)}
               />
               <button className="button button-tertiary" onClick={() => removeTranche(index)}>
-                Remove
+                {t.remove}
               </button>
             </div>
           ))}
         </div>
         <div className="tranche-actions">
           <button className="button" onClick={calculateReport}>
-            Calculate
+            {t.calculate}
           </button>
-          {trancheStatus && <span className="status-text">{trancheStatus}</span>}
+          {trancheStatus && <span className="status-text">{t.reportCalculated}</span>}
           {trancheError && <span className="error-text">{trancheError}</span>}
         </div>
       </section>
@@ -252,13 +358,13 @@ function App() {
         <section className="report-card">
           <div className="report-header">
             <div>
-              <p className="file-label">Report</p>
-              <h2>FX differences summary</h2>
+              <p className="file-label">{t.reportTitle}</p>
+              <h2>{t.summaryTitle}</h2>
             </div>
           </div>
           {report.error ? (
             <div className="panel panel-error">
-              <strong>Calculation error:</strong> {report.error}
+              <strong>{t.calcError}:</strong> {report.error}
             </div>
           ) : null}
           <div className="report-grid">
@@ -271,7 +377,7 @@ function App() {
                   : ''
               }`}
             >
-              <span>Final PLN (gain/loss)</span>
+              <span>{t.finalPln}</span>
               <strong
                 className={
                   report.summary?.total_fx_difference > 0
@@ -285,21 +391,21 @@ function App() {
               </strong>
             </div>
             <div className="report-item">
-              <span>Total outflow</span>
+              <span>{t.totalOutflow}</span>
               <strong>{report.summary?.total_outflow?.toFixed?.(2) ?? report.summary?.total_outflow}</strong>
             </div>
             <div className="report-item">
-              <span>Total covered</span>
+              <span>{t.totalCovered}</span>
               <strong>{report.summary?.total_covered?.toFixed?.(2) ?? report.summary?.total_covered}</strong>
             </div>
             <div className="report-item">
-              <span>Missing coverage</span>
+              <span>{t.missingCoverage}</span>
               <strong>{report.summary?.missing_coverage?.toFixed?.(2) ?? report.summary?.missing_coverage}</strong>
             </div>
           </div>
           {report.warnings?.length ? (
             <div className="panel panel-error">
-              <strong>Warnings:</strong>
+              <strong>{t.warnings}:</strong>
               <ul>
                 {report.warnings.map((warning, index) => (
                   <li key={`warn-${index}`}>{warning}</li>
@@ -308,8 +414,8 @@ function App() {
             </div>
           ) : null}
           <div className="report-subtitle">
-            <h3>Tranche usage history</h3>
-            <p>Outgoing transactions are grouped under the tranches they consumed.</p>
+            <h3>{t.trancheHistoryTitle}</h3>
+            <p>{t.trancheHistorySubtitle}</p>
           </div>
           <div className="tranche-history">
             {report.tranches?.map((tranche, index) => (
@@ -318,39 +424,46 @@ function App() {
                   <div>
                     <strong>{tranche.date}</strong>
                     <span className="pill pill-muted">
-                      {tranche.source === 'statement' ? 'Statement tranche' : 'Manual tranche'}
+                      {tranche.source === 'statement' ? t.statementTranche : t.manualTranche}
                     </span>
                   </div>
                   <span className="pill">
-                    Remaining {tranche.remaining?.toFixed?.(2) ?? tranche.remaining}
+                    {t.remaining} {tranche.remaining?.toFixed?.(2) ?? tranche.remaining}
                   </span>
                 </div>
                 <div className="tranche-history-meta">
-                  <span>Amount: {tranche.amount?.toFixed?.(2) ?? tranche.amount}</span>
-                  <span>Rate: {tranche.rate?.toFixed?.(4) ?? tranche.rate}</span>
-                  {tranche.source_note ? <span>{tranche.source_note}</span> : null}
+                  <span>{t.amount}: {tranche.amount?.toFixed?.(2) ?? tranche.amount}</span>
+                  <span>{t.rate}: {tranche.rate?.toFixed?.(4) ?? tranche.rate}</span>
+                  {tranche.source_note ? (
+                    <span>
+                      {lang === 'pl' ? 'Automatycznie z wyciągu' : 'Auto from statement'}
+                    </span>
+                  ) : null}
                 </div>
-                  {tranche.usages?.length ? (
-                    <div className="tranche-usage-list">
-                      {tranche.usages.map((usage, usageIndex) => (
-                        <div className="tranche-usage" key={`usage-${usageIndex}`}>
-                          <span>{usage.transaction_date}</span>
-                          <span className="mono">{usage.transaction_ref || '—'}</span>
-                          <span>{usage.amount_used?.toFixed?.(2) ?? usage.amount_used}</span>
-                          <span>
-                            FX {usage.fx_difference?.toFixed?.(2) ?? usage.fx_difference}
-                          </span>
-                          <span className="usage-formula">
-                            ({usage.nbp_rate?.toFixed?.(4) ?? usage.nbp_rate} -{' '}
-                            {tranche.rate?.toFixed?.(4) ?? tranche.rate}) ×{' '}
-                            {usage.amount_used?.toFixed?.(2) ?? usage.amount_used}
-                          </span>
-                          <span>Remaining {usage.remaining?.toFixed?.(2) ?? usage.remaining}</span>
-                        </div>
-                      ))}
-                    </div>
+                {tranche.usages?.length ? (
+                  <div className="tranche-usage-list">
+                    {tranche.usages.map((usage, usageIndex) => (
+                      <div className="tranche-usage" key={`usage-${usageIndex}`}>
+                        <span>{usage.transaction_date}</span>
+                        <span className="mono">{usage.transaction_ref || '—'}</span>
+                        <span>{usage.amount_used?.toFixed?.(2) ?? usage.amount_used}</span>
+                        <span>
+                          {t.fx} {usage.fx_difference?.toFixed?.(2) ?? usage.fx_difference}
+                        </span>
+                        <span className="usage-formula">
+                          {t.formulaLabel}:{' '}
+                          ({usage.nbp_rate?.toFixed?.(4) ?? usage.nbp_rate} -{' '}
+                          {tranche.rate?.toFixed?.(4) ?? tranche.rate}) ×{' '}
+                          {usage.amount_used?.toFixed?.(2) ?? usage.amount_used}
+                        </span>
+                        <span>{t.remaining} {usage.remaining?.toFixed?.(2) ?? usage.remaining}</span>
+                      </div>
+                    ))}
+                  </div>
                 ) : (
-                  <div className="muted">No outflows assigned yet.</div>
+                  <div className="muted">
+                    {lang === 'pl' ? 'Brak przypisanych wydatków.' : 'No outflows assigned yet.'}
+                  </div>
                 )}
               </div>
             ))}
@@ -400,12 +513,12 @@ function App() {
             <section key={file.file} className="file-card">
               <div className="file-header">
                 <div>
-                  <p className="file-label">Statement file</p>
+                  <p className="file-label">{t.statementFile}</p>
                   <h2>{file.base_name || file.file}</h2>
                   <p className="file-rate">
-                    NBP USD:{" "}
+                    {t.nbpUsd}:{' '}
                     {file.nbp_rate
-                      ? `${file.nbp_rate} (as of ${file.nbp_date || '—'})`
+                      ? `${file.nbp_rate} (${t.asOf} ${file.nbp_date || '—'})`
                       : file.nbp_error
                       ? `Unavailable (${file.nbp_error})`
                       : '—'}
@@ -413,14 +526,14 @@ function App() {
                 </div>
                 <div className="file-actions">
                   <span className="pill">
-                    {file.transactions?.length ?? 0} transactions
+                    {file.transactions?.length ?? 0} {t.transactions}
                   </span>
                   <button
                     className="button button-tertiary"
                     onClick={() => handleDelete(file.base_name)}
                     disabled={deleting === file.base_name}
                   >
-                    {deleting === file.base_name ? 'Deleting…' : 'Delete'}
+                    {deleting === file.base_name ? 'Deleting…' : t.delete}
                   </button>
                 </div>
               </div>
@@ -429,13 +542,13 @@ function App() {
               ) : (
                 <div className="table">
                   <div className="table-row table-head">
-                    <span>Value date</span>
-                    <span>Entry date</span>
-                    <span>D/C</span>
-                    <span>Amount</span>
-                    <span>Code</span>
-                    <span>Reference</span>
-                    <span>Details</span>
+                    <span>{t.valueDate}</span>
+                    <span>{t.entryDate}</span>
+                    <span>{t.dc}</span>
+                    <span>{t.amount}</span>
+                    <span>{t.code}</span>
+                    <span>{t.reference}</span>
+                    <span>{t.details}</span>
                   </div>
                   {file.transactions?.map((txn, index) => (
                     <div className="table-row" key={`${file.file}-${index}`}>
