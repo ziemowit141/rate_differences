@@ -89,3 +89,9 @@ make wails-rebuild
 ```
 
 The Wails build bundles a precompiled Swift extractor in the app resources. On first run, the backend copies it into the user cache so no Swift toolchain is required at runtime.
+
+### GitHub Actions (Intel build)
+
+There is a workflow that builds the Intel macOS app on `macos-13` and uploads a zip:
+
+`.github/workflows/wails-macos-intel.yml`

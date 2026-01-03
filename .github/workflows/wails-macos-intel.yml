@@ -1,0 +1,43 @@
+name: Build macOS Intel App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "16.20.0"
+
+      - name: Install Wails
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          echo "$HOME/go/bin" >> $GITHUB_PATH
+
+      - name: Build Wails app (Intel)
+        run: |
+          make wails-rebuild WAILS="$HOME/go/bin/wails"
+
+      - name: Package app
+        run: |
+          cd wails/RateDifferences/build/bin
+          ditto -c -k --sequesterRsrc --keepParent RateDifferences.app RateDifferences-macos-intel.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RateDifferences-macos-intel
+          path: wails/RateDifferences/build/bin/RateDifferences-macos-intel.zip

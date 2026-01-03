@@ -1,5 +1,7 @@
 .PHONY: dev wails-build wails-rebuild
 
+WAILS ?= ~/go/bin/wails
+
 SHELL := /bin/bash
 
 dev:
@@ -17,7 +19,7 @@ dev:
 wails-build:
 	@cd wails/RateDifferences && \
 	bash ../RateDifferences/scripts/build_extractor.sh && \
-	~/go/bin/wails build -platform darwin/amd64 && \
+	$(WAILS) build -platform darwin/amd64 && \
 	if [ -f build/bin/RateDifferences.app/Contents/Resources/extract ]; then true; \
 	else cp resources/extract build/bin/RateDifferences.app/Contents/Resources/extract; fi
 
@@ -25,6 +27,6 @@ wails-rebuild:
 	@rm -rf wails/RateDifferences/build wails/RateDifferences/frontend/dist && \
 	cd wails/RateDifferences && \
 	bash ../RateDifferences/scripts/build_extractor.sh && \
-	~/go/bin/wails build -platform darwin/amd64 && \
+	$(WAILS) build -platform darwin/amd64 && \
 	if [ -f build/bin/RateDifferences.app/Contents/Resources/extract ]; then true; \
 	else cp resources/extract build/bin/RateDifferences.app/Contents/Resources/extract; fi
