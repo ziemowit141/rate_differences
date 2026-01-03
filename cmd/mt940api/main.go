@@ -10,7 +10,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -427,16 +426,7 @@ func saveUploadedFile(file *multipart.FileHeader, dest string) error {
 }
 
 func runConversion(pdfPath, mt940Path string) error {
-	if err := os.MkdirAll(filepath.Dir(mt940Path), 0o755); err != nil {
-		return err
-	}
-	cmd := exec.Command("python3", "-m", "pdftomt940", "--statement", pdfPath, "--output", mt940Path)
-	cmd.Dir = repoRoot()
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("conversion failed: %w (%s)", err, strings.TrimSpace(string(output)))
-	}
-	return nil
+	return convertPDFToMT940(pdfPath, mt940Path)
 }
 
 func buildTempName(index int) string {
