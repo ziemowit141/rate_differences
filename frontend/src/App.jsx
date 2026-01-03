@@ -31,6 +31,12 @@ function App() {
     if (files.length === 0) {
       return
     }
+    await uploadFiles(files)
+    event.target.value = ''
+  }
+
+  const uploadFiles = async (files) => {
+    if (!files.length) return
     setUploading(true)
     setUploadError('')
     setUploadResults([])
@@ -51,8 +57,20 @@ function App() {
       setUploadError(err instanceof Error ? err.message : 'Unknown error')
     } finally {
       setUploading(false)
-      event.target.value = ''
     }
+  }
+
+  const handleDrop = async (event) => {
+    event.preventDefault()
+    const files = Array.from(event.dataTransfer.files || []).filter(
+      (file) => file.type === 'application/pdf'
+    )
+    if (!files.length || uploading) return
+    await uploadFiles(files)
+  }
+
+  const handleDragOver = (event) => {
+    event.preventDefault()
   }
 
   useEffect(() => {
@@ -87,6 +105,17 @@ function App() {
           </button>
         </div>
       </header>
+
+      <section
+        className={`dropzone ${uploading ? 'dropzone-disabled' : ''}`}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+      >
+        <div>
+          <h2>Drag & drop PDFs</h2>
+          <p>Drop multiple Citibank statements here or use the upload button.</p>
+        </div>
+      </section>
 
       {uploadError && (
         <div className="panel panel-error">
