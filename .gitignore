@@ -17,3 +17,4 @@ bin/
 *.out
 *.test
 *.prof
+node_modules/

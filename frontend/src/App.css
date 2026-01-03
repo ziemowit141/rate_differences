@@ -1,0 +1,148 @@
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+
+.app-header {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  color: #2f4858;
+  margin: 0 0 8px;
+}
+
+.subhead {
+  max-width: 540px;
+  color: #3d4d57;
+  margin-top: 12px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+.button {
+  border: none;
+  background: #f2a900;
+  color: #1b1d1f;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(242, 169, 0, 0.25);
+}
+
+.panel {
+  padding: 16px 18px;
+  background: #f7f4ef;
+  border-radius: 16px;
+  color: #2e3133;
+}
+
+.panel-error {
+  background: #ffe7e0;
+  color: #5c2419;
+}
+
+.files {
+  display: grid;
+  gap: 24px;
+}
+
+.file-card {
+  background: #fffdf8;
+  border-radius: 22px;
+  padding: 20px 22px 26px;
+  box-shadow: 0 16px 40px rgba(34, 39, 43, 0.08);
+}
+
+.file-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.file-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  margin: 0 0 6px;
+  color: #6c7a86;
+}
+
+.pill {
+  background: #22272b;
+  color: #f8f0e6;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.table {
+  display: grid;
+  gap: 8px;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 90px 90px 60px 110px 70px 1fr 2fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 10px;
+  border-radius: 12px;
+  background: #f8f4ee;
+  font-size: 0.9rem;
+}
+
+.table-head {
+  background: transparent;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: #7a8791;
+}
+
+.table-row span {
+  word-break: break-word;
+}
+
+.mono {
+  font-family: "SF Mono", "Fira Code", "Menlo", monospace;
+  font-size: 0.85rem;
+}
+
+.details {
+  color: #2e3133;
+}
+
+@media (max-width: 960px) {
+  .app-header {
+    flex-direction: column;
+  }
+
+  .table-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
