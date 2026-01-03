@@ -49,3 +49,13 @@ jobs:
         with:
           name: RateDifferences-macos-intel
           path: wails/RateDifferences/build/bin/RateDifferences-macos-intel.zip
+
+      - name: Create or update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: macos-intel-latest
+          name: macos-intel-latest
+          files: wails/RateDifferences/build/bin/RateDifferences-macos-intel.zip
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
