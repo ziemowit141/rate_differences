@@ -131,10 +131,6 @@ function App() {
         rate: Number(row.rate),
       }))
       .filter((row) => row.date && !Number.isNaN(row.amount) && !Number.isNaN(row.rate))
-    if (!payload.length) {
-      setTrancheError('Add at least one complete tranche row.')
-      return
-    }
     try {
       const response = await fetch('/calculate', {
         method: 'POST',
@@ -237,11 +233,7 @@ function App() {
                 value={row.rate}
                 onChange={(event) => updateTranche(index, 'rate', event.target.value)}
               />
-              <button
-                className="button button-tertiary"
-                onClick={() => removeTranche(index)}
-                disabled={tranches.length === 1}
-              >
+              <button className="button button-tertiary" onClick={() => removeTranche(index)}>
                 Remove
               </button>
             </div>
@@ -270,9 +262,27 @@ function App() {
             </div>
           ) : null}
           <div className="report-grid">
-            <div className="report-item">
+            <div
+              className={`report-item ${
+                report.summary?.total_fx_difference > 0
+                  ? 'gain'
+                  : report.summary?.total_fx_difference < 0
+                  ? 'loss'
+                  : ''
+              }`}
+            >
               <span>Final PLN (gain/loss)</span>
-              <strong>{report.summary?.total_fx_difference?.toFixed?.(2) ?? report.summary?.total_fx_difference}</strong>
+              <strong
+                className={
+                  report.summary?.total_fx_difference > 0
+                    ? 'gain'
+                    : report.summary?.total_fx_difference < 0
+                    ? 'loss'
+                    : ''
+                }
+              >
+                {report.summary?.total_fx_difference?.toFixed?.(2) ?? report.summary?.total_fx_difference}
+              </strong>
             </div>
             <div className="report-item">
               <span>Total outflow</span>

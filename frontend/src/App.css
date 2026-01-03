@@ -233,6 +233,22 @@
   font-size: 1.2rem;
 }
 
+.report-item strong.gain {
+  color: #2f7d46;
+}
+
+.report-item strong.loss {
+  color: #b03a2e;
+}
+
+.report-item.gain {
+  background: rgba(47, 125, 70, 0.12);
+}
+
+.report-item.loss {
+  background: rgba(176, 58, 46, 0.12);
+}
+
 .report-table .table-row {
   grid-template-columns: 110px 160px 100px 110px 100px 1fr;
 }
