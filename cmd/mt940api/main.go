@@ -58,6 +58,16 @@ type uploadResult struct {
 	Error     string `json:"error,omitempty"`
 }
 
+type trancheInput struct {
+	Date   string  `json:"date"`
+	Amount float64 `json:"amount"`
+	Rate   float64 `json:"rate"`
+}
+
+type trancheRequest struct {
+	Tranches []trancheInput `json:"tranches"`
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "listen address")
 	flag.Parse()
@@ -70,6 +80,7 @@ func main() {
 	e.GET("/transactions", transactionsHandler)
 	e.POST("/upload", uploadHandler)
 	e.DELETE("/files/:base", deleteHandler)
+	e.POST("/tranches", tranchesHandler)
 
 	log.Printf("mt940 api listening on %s", *addr)
 	if err := e.Start(*addr); err != nil {
@@ -263,6 +274,22 @@ func parseTransactions(raw []map[string]interface{}) []transactionView {
 		transactions = append(transactions, view)
 	}
 	return transactions
+}
+
+func tranchesHandler(c echo.Context) error {
+	var req trancheRequest
+	if err := c.Bind(&req); err != nil {
+		return c.String(http.StatusBadRequest, "invalid json body")
+	}
+	if len(req.Tranches) == 0 {
+		return c.String(http.StatusBadRequest, "no tranches provided")
+	}
+	for _, tranche := range req.Tranches {
+		log.Printf("tranche: date=%s amount=%.2f rate=%.6f", tranche.Date, tranche.Amount, tranche.Rate)
+	}
+	return writeJSON(c, map[string]any{
+		"accepted": len(req.Tranches),
+	})
 }
 
 func deleteHandler(c echo.Context) error {

@@ -142,6 +142,66 @@
   box-shadow: 0 16px 40px rgba(34, 39, 43, 0.08);
 }
 
+.tranche-card {
+  background: #fffdf8;
+  border-radius: 22px;
+  padding: 20px 22px 26px;
+  box-shadow: 0 16px 40px rgba(34, 39, 43, 0.08);
+  margin-bottom: 24px;
+}
+
+.tranche-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.tranche-table {
+  display: grid;
+  gap: 10px;
+}
+
+.tranche-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr 120px;
+  gap: 12px;
+  align-items: center;
+  background: #f8f4ee;
+  padding: 10px 12px;
+  border-radius: 12px;
+}
+
+.tranche-head {
+  background: transparent;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  color: #7a8791;
+  font-weight: 600;
+}
+
+.tranche-row input {
+  border-radius: 10px;
+  border: 1px solid rgba(27, 29, 31, 0.2);
+  padding: 8px 10px;
+  background: #fff;
+  font-family: inherit;
+}
+
+.tranche-actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-text {
+  color: #2f5a3e;
+  font-weight: 600;
+}
+
 .file-header {
   display: flex;
   justify-content: space-between;

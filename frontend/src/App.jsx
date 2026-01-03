@@ -9,6 +9,11 @@ function App() {
   const [uploadError, setUploadError] = useState('')
   const [uploadResults, setUploadResults] = useState([])
   const [deleting, setDeleting] = useState('')
+  const [tranches, setTranches] = useState([
+    { date: '', amount: '', rate: '' },
+  ])
+  const [trancheError, setTrancheError] = useState('')
+  const [trancheStatus, setTrancheStatus] = useState('')
 
   const loadTransactions = async () => {
     setLoading(true)
@@ -93,6 +98,52 @@ function App() {
     }
   }
 
+  const updateTranche = (index, field, value) => {
+    setTranches((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [field]: value } : row
+      )
+    )
+  }
+
+  const addTranche = () => {
+    setTranches((current) => [...current, { date: '', amount: '', rate: '' }])
+  }
+
+  const removeTranche = (index) => {
+    setTranches((current) => current.filter((_, rowIndex) => rowIndex !== index))
+  }
+
+  const submitTranches = async () => {
+    setTrancheError('')
+    setTrancheStatus('')
+    const payload = tranches
+      .map((row) => ({
+        date: row.date,
+        amount: Number(row.amount),
+        rate: Number(row.rate),
+      }))
+      .filter((row) => row.date && !Number.isNaN(row.amount) && !Number.isNaN(row.rate))
+    if (!payload.length) {
+      setTrancheError('Add at least one complete tranche row.')
+      return
+    }
+    try {
+      const response = await fetch('/tranches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tranches: payload }),
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const result = await response.json()
+      setTrancheStatus(`Accepted ${result.accepted || payload.length} tranches.`)
+    } catch (err) {
+      setTrancheError(err instanceof Error ? err.message : 'Unknown error')
+    }
+  }
+
   useEffect(() => {
     void loadTransactions()
   }, [])
@@ -134,6 +185,63 @@ function App() {
         <div>
           <h2>Drag & drop PDFs</h2>
           <p>Drop multiple Citibank statements here or use the upload button.</p>
+        </div>
+      </section>
+
+      <section className="tranche-card">
+        <div className="tranche-header">
+          <div>
+            <p className="file-label">Tranches</p>
+            <h2>Input tranches for FX calculations</h2>
+          </div>
+          <button className="button button-secondary" onClick={addTranche}>
+            Add row
+          </button>
+        </div>
+        <div className="tranche-table">
+          <div className="tranche-row tranche-head">
+            <span>Date</span>
+            <span>Amount</span>
+            <span>Rate</span>
+            <span></span>
+          </div>
+          {tranches.map((row, index) => (
+            <div className="tranche-row" key={`tranche-${index}`}>
+              <input
+                type="date"
+                value={row.date}
+                onChange={(event) => updateTranche(index, 'date', event.target.value)}
+              />
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Amount"
+                value={row.amount}
+                onChange={(event) => updateTranche(index, 'amount', event.target.value)}
+              />
+              <input
+                type="number"
+                step="0.0001"
+                placeholder="Rate"
+                value={row.rate}
+                onChange={(event) => updateTranche(index, 'rate', event.target.value)}
+              />
+              <button
+                className="button button-tertiary"
+                onClick={() => removeTranche(index)}
+                disabled={tranches.length === 1}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="tranche-actions">
+          <button className="button" onClick={submitTranches}>
+            Send tranches
+          </button>
+          {trancheStatus && <span className="status-text">{trancheStatus}</span>}
+          {trancheError && <span className="error-text">{trancheError}</span>}
         </div>
       </section>
 
