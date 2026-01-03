@@ -85,7 +85,7 @@ func extractPDFTextLines(pdfPath string) ([]string, error) {
 }
 
 func ensureExtractorBinary() (string, error) {
-	binPath := filepath.Join("pdftomt940", ".swift-bin", "extract")
+	binPath := filepath.Join("cmd", "mt940api", "bin", "extract")
 	if fileExists(binPath) {
 		return binPath, nil
 	}
@@ -93,7 +93,7 @@ func ensureExtractorBinary() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("swiftc not found; cannot build extractor")
 	}
-	scriptPath := filepath.Join("pdftomt940", "extract.swift")
+	scriptPath := filepath.Join("cmd", "mt940api", "tools", "extract.swift")
 	if !fileExists(scriptPath) {
 		return "", fmt.Errorf("missing extract.swift")
 	}
@@ -102,8 +102,8 @@ func ensureExtractorBinary() (string, error) {
 	}
 	cmd := exec.Command(swiftc, scriptPath, "-o", binPath)
 	cmd.Env = append(os.Environ(),
-		"SWIFT_MODULE_CACHE_PATH="+filepath.Join("pdftomt940", ".swift-cache", "swift"),
-		"CLANG_MODULE_CACHE_PATH="+filepath.Join("pdftomt940", ".swift-cache", "clang"),
+		"SWIFT_MODULE_CACHE_PATH="+filepath.Join("cmd", "mt940api", ".swift-cache", "swift"),
+		"CLANG_MODULE_CACHE_PATH="+filepath.Join("cmd", "mt940api", ".swift-cache", "clang"),
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("swiftc failed: %s", strings.TrimSpace(string(output)))

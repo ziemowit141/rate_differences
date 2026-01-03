@@ -10,6 +10,8 @@ build/
 venv/
 .swift-cache/
 .swift-bin/
+cmd/mt940api/.swift-cache/
+cmd/mt940api/bin/
 .DS_Store
 *.log
 bin/
