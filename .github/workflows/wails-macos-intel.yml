@@ -29,7 +29,15 @@ jobs:
 
       - name: Build Wails app (Intel)
         run: |
-          make wails-rebuild WAILS="$HOME/go/bin/wails"
+          set -euxo pipefail
+          make wails-rebuild WAILS="$HOME/go/bin/wails" 2>&1 | tee /tmp/wails-build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wails-build-log
+          path: /tmp/wails-build.log
 
       - name: Package app
         run: |
