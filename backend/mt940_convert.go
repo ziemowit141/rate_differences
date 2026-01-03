@@ -1,9 +1,11 @@
-package main
+package backend
 
 import (
 	"bytes"
+	_ "embed"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -43,6 +45,9 @@ var (
 	statementNoPattern     = regexp.MustCompile(`^Numer wyciągu\s*:(.+)$`)
 )
 
+//go:embed tools/extract.swift
+var extractSwiftSource []byte
+
 func convertPDFToMT940(pdfPath, mt940Path string) error {
 	lines, err := extractPDFTextLines(pdfPath)
 	if err != nil {
@@ -56,17 +61,23 @@ func convertPDFToMT940(pdfPath, mt940Path string) error {
 	if err := os.MkdirAll(filepath.Dir(mt940Path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(mt940Path, []byte(payload), 0o644)
+	if err := os.WriteFile(mt940Path, []byte(payload), 0o644); err != nil {
+		return err
+	}
+	logPrintf("pdf: wrote mt940 to %s", mt940Path)
+	return nil
 }
 
 func extractPDFTextLines(pdfPath string) ([]string, error) {
 	if _, err := os.Stat(pdfPath); err != nil {
 		return nil, fmt.Errorf("missing pdf: %w", err)
 	}
+	logPrintf("pdf: extracting text from %s", pdfPath)
 	binaryPath, err := ensureExtractorBinary()
 	if err != nil {
 		return nil, err
 	}
+	logPrintf("pdf: using extractor %s", binaryPath)
 	cmd := exec.Command(binaryPath, pdfPath)
 	output, err := cmd.Output()
 	if err != nil {
@@ -85,30 +96,89 @@ func extractPDFTextLines(pdfPath string) ([]string, error) {
 }
 
 func ensureExtractorBinary() (string, error) {
-	binPath := filepath.Join("cmd", "mt940api", "bin", "extract")
+	cacheDir := extractorCacheDir()
+	binPath := filepath.Join(cacheDir, "extract")
 	if fileExists(binPath) {
+		return binPath, nil
+	}
+	if bundled := bundledExtractorPath(); bundled != "" {
+		if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+			return "", err
+		}
+		if err := copyFile(bundled, binPath); err != nil {
+			return "", err
+		}
+		if err := os.Chmod(binPath, 0o755); err != nil {
+			return "", err
+		}
 		return binPath, nil
 	}
 	swiftc, err := exec.LookPath("swiftc")
 	if err != nil {
 		return "", fmt.Errorf("swiftc not found; cannot build extractor")
 	}
-	scriptPath := filepath.Join("cmd", "mt940api", "tools", "extract.swift")
-	if !fileExists(scriptPath) {
-		return "", fmt.Errorf("missing extract.swift")
+	if len(extractSwiftSource) == 0 {
+		return "", fmt.Errorf("missing embedded extract.swift")
 	}
-	if err := os.MkdirAll(filepath.Dir(binPath), 0o755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		return "", err
 	}
+	scriptPath := filepath.Join(cacheDir, "extract.swift")
+	if err := os.WriteFile(scriptPath, extractSwiftSource, 0o644); err != nil {
+		return "", err
+	}
+	logPrintf("pdf: compiling extractor with swiftc")
 	cmd := exec.Command(swiftc, scriptPath, "-o", binPath)
 	cmd.Env = append(os.Environ(),
-		"SWIFT_MODULE_CACHE_PATH="+filepath.Join("cmd", "mt940api", ".swift-cache", "swift"),
-		"CLANG_MODULE_CACHE_PATH="+filepath.Join("cmd", "mt940api", ".swift-cache", "clang"),
+		"SWIFT_MODULE_CACHE_PATH="+filepath.Join(cacheDir, "swift-cache"),
+		"CLANG_MODULE_CACHE_PATH="+filepath.Join(cacheDir, "clang-cache"),
 	)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("swiftc failed: %s", strings.TrimSpace(string(output)))
 	}
 	return binPath, nil
+}
+
+func extractorCacheDir() string {
+	if env := os.Getenv("RATE_DIFF_HOME"); env != "" {
+		return filepath.Join(env, "tools")
+	}
+	cache, err := os.UserCacheDir()
+	if err != nil || cache == "" {
+		return filepath.Join(os.TempDir(), "rate_differences")
+	}
+	return filepath.Join(cache, "rate_differences")
+}
+
+func bundledExtractorPath() string {
+	if env := os.Getenv("RATE_DIFF_EXTRACTOR"); env != "" && fileExists(env) {
+		return env
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	resources := filepath.Join(filepath.Dir(exe), "..", "Resources", "extract")
+	resources = filepath.Clean(resources)
+	if fileExists(resources) {
+		return resources
+	}
+	return ""
+}
+
+func copyFile(src, dest string) error {
+	input, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dest, input, 0o755)
+}
+
+func logPrintf(format string, args ...any) {
+	if logger := os.Getenv("RATE_DIFF_LOG"); logger == "" {
+		return
+	}
+	log.Printf(format, args...)
 }
 
 func parseStatementText(lines []string) (mt940Statement, error) {

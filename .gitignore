@@ -12,6 +12,8 @@ venv/
 .swift-bin/
 cmd/mt940api/.swift-cache/
 cmd/mt940api/bin/
+wails/RateDifferences/build/
+wails/RateDifferences/frontend/dist/
 .DS_Store
 *.log
 bin/

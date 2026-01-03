@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "RateDifferences",
+  "outputfilename": "RateDifferences",
+  "frontend:install": "bash ../scripts/install_frontend.sh",
+  "frontend:build": "bash ../scripts/build_frontend.sh",
+  "frontend:dev:watcher": "bash ../scripts/dev_frontend.sh",
+  "frontend:dev:serverUrl": "http://localhost:5173",
+  "author": {
+    "name": "ziemowit141",
+    "email": "piotr.stroz@vitrifi.net"
+  }
+}

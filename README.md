@@ -20,7 +20,11 @@ Start the API:
 go run ./cmd/mt940api --addr :8080
 ```
 
-The backend now converts PDFs with a Go parser and a Swift extractor. If the extractor binary is missing, it will compile `cmd/mt940api/tools/extract.swift` using `swiftc` and store the binary in `cmd/mt940api/bin/extract`.
+The backend now converts PDFs with a Go parser and a Swift extractor. The Swift source is embedded (`backend/tools/extract.swift`) and compiled on demand into the user cache directory.
+
+Data files are stored in:
+- `${RATE_DIFF_HOME}/statements` and `${RATE_DIFF_HOME}/mt940s` if `RATE_DIFF_HOME` is set
+- otherwise `~/Library/Caches/rate_differences/data/...` on macOS
 
 Fetch transactions (default reads `cmd/mt940api/data/mt940s/*.mt940`):
 
@@ -67,3 +71,21 @@ The UI is served by Vite (usually `http://localhost:5173`) and proxies to the Go
 ```bash
 make dev
 ```
+
+## Wails (macOS app)
+
+Build an Intel macOS app:
+
+```bash
+make wails-build
+```
+
+The `.app` bundle will be created under `wails/RateDifferences/build/bin/`.
+
+If the build output is stale, run:
+
+```bash
+make wails-rebuild
+```
+
+The Wails build bundles a precompiled Swift extractor in the app resources. On first run, the backend copies it into the user cache so no Swift toolchain is required at runtime.

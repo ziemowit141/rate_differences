@@ -17,6 +17,10 @@ function App() {
   const [report, setReport] = useState(null)
   const nextTrancheKeyRef = useRef(2)
 
+  const apiBase =
+    window.location.protocol === 'wails:' ? 'http://127.0.0.1:34115' : ''
+  const apiFetch = (path, options) => fetch(`${apiBase}${path}`, options)
+
   const copy = {
     pl: {
       title: 'Kalkulator różnic kursowych',
@@ -114,7 +118,7 @@ function App() {
     setLoading(true)
     setError('')
     try {
-      const response = await fetch('/transactions')
+      const response = await apiFetch('/transactions')
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
@@ -143,14 +147,18 @@ function App() {
     try {
       const formData = new FormData()
       files.forEach((file) => formData.append('files', file))
-      const response = await fetch('/upload', {
+      const response = await apiFetch('/upload', {
         method: 'POST',
         body: formData,
       })
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
       const payload = await response.json()
+      if (!response.ok) {
+        const messages = (payload?.files || [])
+          .map((item) => item.error)
+          .filter(Boolean)
+          .join('; ')
+        throw new Error(messages || `HTTP ${response.status}`)
+      }
       await loadTransactions()
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Unknown error')
@@ -177,7 +185,7 @@ function App() {
     setDeleting(baseName)
     setError('')
     try {
-      const response = await fetch(`/files/${encodeURIComponent(baseName)}`, {
+      const response = await apiFetch(`/files/${encodeURIComponent(baseName)}`, {
         method: 'DELETE',
       })
       if (!response.ok) {
@@ -223,7 +231,7 @@ function App() {
       }))
       .filter((row) => row.date && !Number.isNaN(row.amount) && !Number.isNaN(row.rate))
     try {
-      const response = await fetch('/calculate', {
+      const response = await apiFetch('/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tranches: payload }),
