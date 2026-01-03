@@ -5,6 +5,9 @@ function App() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [uploadResults, setUploadResults] = useState([])
 
   const loadTransactions = async () => {
     setLoading(true)
@@ -23,6 +26,35 @@ function App() {
     }
   }
 
+  const handleUpload = async (event) => {
+    const files = Array.from(event.target.files || [])
+    if (files.length === 0) {
+      return
+    }
+    setUploading(true)
+    setUploadError('')
+    setUploadResults([])
+    try {
+      const formData = new FormData()
+      files.forEach((file) => formData.append('files', file))
+      const response = await fetch('/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      const payload = await response.json()
+      setUploadResults(payload.files || [])
+      await loadTransactions()
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Unknown error')
+    } finally {
+      setUploading(false)
+      event.target.value = ''
+    }
+  }
+
   useEffect(() => {
     void loadTransactions()
   }, [])
@@ -38,11 +70,49 @@ function App() {
           </p>
         </div>
         <div className="header-actions">
+          <label className="upload">
+            <input
+              type="file"
+              accept="application/pdf"
+              multiple
+              onChange={handleUpload}
+              disabled={uploading}
+            />
+            <span className="button button-secondary">
+              {uploading ? 'Uploading…' : 'Upload PDFs'}
+            </span>
+          </label>
           <button className="button" onClick={loadTransactions} disabled={loading}>
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       </header>
+
+      {uploadError && (
+        <div className="panel panel-error">
+          <strong>Upload failed:</strong> {uploadError}
+        </div>
+      )}
+
+      {uploadResults.length > 0 && (
+        <div className="panel panel-upload">
+          <h3>Upload results</h3>
+          <ul>
+            {uploadResults.map((result) => (
+              <li key={result.source}>
+                <strong>{result.source}</strong>{' '}
+                {result.error ? (
+                  <span className="error-text">{result.error}</span>
+                ) : (
+                  <span>
+                    → {result.pdf_path} → {result.mt940_path}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {error && (
         <div className="panel panel-error">

@@ -5,15 +5,20 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	"github.com/mmalcek/mt940"
 )
 
@@ -38,13 +43,26 @@ type transactionsResponse struct {
 	Files []fileTransactions `json:"files"`
 }
 
+type uploadResponse struct {
+	Files []uploadResult `json:"files"`
+}
+
+type uploadResult struct {
+	Source    string `json:"source"`
+	PDFPath   string `json:"pdf_path,omitempty"`
+	MT940Path string `json:"mt940_path,omitempty"`
+	Error     string `json:"error,omitempty"`
+}
+
 func main() {
 	addr := flag.String("addr", ":8080", "listen address")
 	flag.Parse()
 
 	e := echo.New()
+	e.Use(middleware.BodyLimit("50M"))
 	e.GET("/health", healthHandler)
 	e.GET("/transactions", transactionsHandler)
+	e.POST("/upload", uploadHandler)
 
 	log.Printf("mt940 api listening on %s", *addr)
 	if err := e.Start(*addr); err != nil {
@@ -59,7 +77,7 @@ func healthHandler(c echo.Context) error {
 func transactionsHandler(c echo.Context) error {
 	dir := strings.TrimSpace(c.QueryParam("dir"))
 	if dir == "" {
-		dir = "mt940s"
+		dir = mt940Dir()
 	}
 	pattern := strings.TrimSpace(c.QueryParam("pattern"))
 	if pattern == "" {
@@ -97,6 +115,43 @@ func transactionsHandler(c echo.Context) error {
 	}
 
 	return writeJSON(c, response)
+}
+
+func uploadHandler(c echo.Context) error {
+	form, err := c.MultipartForm()
+	if err != nil {
+		return c.String(http.StatusBadRequest, "invalid multipart form")
+	}
+	files := form.File["files"]
+	if len(files) == 0 {
+		return c.String(http.StatusBadRequest, "no files uploaded")
+	}
+
+	results := make([]uploadResult, 0, len(files))
+	for index, file := range files {
+		result := uploadResult{Source: file.Filename}
+		baseName := buildDateName(index)
+		pdfPath := filepath.Join(statementDir(), baseName+".pdf")
+		mt940Path := filepath.Join(mt940Dir(), baseName+".mt940")
+
+		if err := saveUploadedFile(file, pdfPath); err != nil {
+			result.Error = err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		if err := runConversion(pdfPath, mt940Path); err != nil {
+			result.Error = err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		result.PDFPath = pdfPath
+		result.MT940Path = mt940Path
+		results = append(results, result)
+	}
+
+	return writeJSON(c, uploadResponse{Files: results})
 }
 
 func parseMT940(data []byte) (mt940Message, error) {
@@ -163,6 +218,83 @@ func parseTransactions(raw []map[string]interface{}) []transactionView {
 		transactions = append(transactions, view)
 	}
 	return transactions
+}
+
+func saveUploadedFile(file *multipart.FileHeader, dest string) error {
+	src, err := file.Open()
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	out, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	_, err = io.Copy(out, src)
+	return err
+}
+
+func runConversion(pdfPath, mt940Path string) error {
+	if err := os.MkdirAll(filepath.Dir(mt940Path), 0o755); err != nil {
+		return err
+	}
+	cmd := exec.Command("python3", "-m", "pdftomt940", "--statement", pdfPath, "--output", mt940Path)
+	cmd.Dir = repoRoot()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("conversion failed: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+func buildDateName(index int) string {
+	base := time.Now().Format("2006-01-02")
+	if index == 0 {
+		return uniqueName(base)
+	}
+	return uniqueName(fmt.Sprintf("%s-%02d", base, index+1))
+}
+
+func uniqueName(base string) string {
+	if !fileExists(filepath.Join(statementDir(), base+".pdf")) &&
+		!fileExists(filepath.Join(mt940Dir(), base+".mt940")) {
+		return base
+	}
+	for i := 2; i < 1000; i++ {
+		candidate := fmt.Sprintf("%s-%02d", base, i)
+		if !fileExists(filepath.Join(statementDir(), candidate+".pdf")) &&
+			!fileExists(filepath.Join(mt940Dir(), candidate+".mt940")) {
+			return candidate
+		}
+	}
+	return fmt.Sprintf("%s-%d", base, time.Now().Unix())
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func repoRoot() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return wd
+}
+
+func statementDir() string {
+	return filepath.Join("cmd", "mt940api", "data", "statements")
+}
+
+func mt940Dir() string {
+	return filepath.Join("cmd", "mt940api", "data", "mt940s")
 }
 
 func writeJSON(c echo.Context, payload any) error {

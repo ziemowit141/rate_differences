@@ -14,19 +14,19 @@ Convert Citibank PDF statements to MT940, inspect MT940 files, and view transact
 ## Convert PDF to MT940
 
 ```bash
-python -m pdftomt940 --statement statements/statement.pdf
+python -m pdftomt940 --statement cmd/mt940api/data/statements/statement.pdf
 ```
 
 Write to a file:
 
 ```bash
-python -m pdftomt940 --statement statements/statement.pdf --output mt940s/bank.mt940
+python -m pdftomt940 --statement cmd/mt940api/data/statements/statement.pdf --output cmd/mt940api/data/mt940s/bank.mt940
 ```
 
 ## Read MT940 summary
 
 ```bash
-python main.py --statement mt940s/bank.mt940
+python main.py --statement cmd/mt940api/data/mt940s/bank.mt940
 ```
 
 ## Go API
@@ -37,10 +37,18 @@ Start the API:
 go run ./cmd/mt940api --addr :8080
 ```
 
-Fetch transactions (default reads `mt940s/*.mt940`):
+Fetch transactions (default reads `cmd/mt940api/data/mt940s/*.mt940`):
 
 ```bash
 curl -s http://localhost:8080/transactions
+```
+
+Upload PDFs (multipart form field `files[]`):
+
+```bash
+curl -s -X POST http://localhost:8080/upload \
+  -F 'files=@/path/to/statement1.pdf' \
+  -F 'files=@/path/to/statement2.pdf'
 ```
 
 ## React UI
