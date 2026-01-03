@@ -181,6 +181,14 @@ function App() {
                 <div>
                   <p className="file-label">Statement file</p>
                   <h2>{file.base_name || file.file}</h2>
+                  <p className="file-rate">
+                    NBP USD:{" "}
+                    {file.nbp_rate
+                      ? `${file.nbp_rate} (as of ${file.nbp_date || '—'})`
+                      : file.nbp_error
+                      ? `Unavailable (${file.nbp_error})`
+                      : '—'}
+                  </p>
                 </div>
                 <div className="file-actions">
                   <span className="pill">

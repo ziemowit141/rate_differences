@@ -38,6 +38,9 @@ type fileTransactions struct {
 	BaseName     string            `json:"base_name"`
 	Error        string            `json:"error,omitempty"`
 	Transactions []transactionView `json:"transactions,omitempty"`
+	NbpRate      float64           `json:"nbp_rate,omitempty"`
+	NbpDate      string            `json:"nbp_date,omitempty"`
+	NbpError     string            `json:"nbp_error,omitempty"`
 }
 
 type transactionsResponse struct {
@@ -61,6 +64,8 @@ func main() {
 
 	e := echo.New()
 	e.Use(middleware.BodyLimit("50M"))
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
 	e.GET("/health", healthHandler)
 	e.GET("/transactions", transactionsHandler)
 	e.POST("/upload", uploadHandler)
@@ -77,6 +82,7 @@ func healthHandler(c echo.Context) error {
 }
 
 func transactionsHandler(c echo.Context) error {
+	log.Printf("transactions: dir=%q pattern=%q", c.QueryParam("dir"), c.QueryParam("pattern"))
 	dir := strings.TrimSpace(c.QueryParam("dir"))
 	if dir == "" {
 		dir = mt940Dir()
@@ -98,7 +104,9 @@ func transactionsHandler(c echo.Context) error {
 	sort.Strings(matches)
 
 	response := transactionsResponse{Files: make([]fileTransactions, 0, len(matches))}
+	nbpCache := map[string]nbpRateResult{}
 	for _, path := range matches {
+		log.Printf("transactions: parsing %s", path)
 		result := fileTransactions{
 			File:     path,
 			BaseName: strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)),
@@ -116,6 +124,17 @@ func transactionsHandler(c echo.Context) error {
 			continue
 		}
 		result.Transactions = parseTransactions(message.Transactions)
+		if date := statementDateFromBase(result.BaseName); date != "" {
+			log.Printf("nbp: lookup USD rate for %s", date)
+			rate := fetchNBPRateCached(nbpCache, date)
+			if rate.Err != nil {
+				log.Printf("nbp: error for %s: %v", date, rate.Err)
+				result.NbpError = rate.Err.Error()
+			} else {
+				result.NbpRate = rate.Mid
+				result.NbpDate = rate.Date
+			}
+		}
 		response.Files = append(response.Files, result)
 	}
 
@@ -123,6 +142,7 @@ func transactionsHandler(c echo.Context) error {
 }
 
 func uploadHandler(c echo.Context) error {
+	log.Printf("upload: incoming request from %s", c.RealIP())
 	form, err := c.MultipartForm()
 	if err != nil {
 		return c.String(http.StatusBadRequest, "invalid multipart form")
@@ -131,6 +151,7 @@ func uploadHandler(c echo.Context) error {
 	if len(files) == 0 {
 		return c.String(http.StatusBadRequest, "no files uploaded")
 	}
+	log.Printf("upload: received %d files", len(files))
 
 	results := make([]uploadResult, 0, len(files))
 	for index, file := range files {
@@ -140,12 +161,14 @@ func uploadHandler(c echo.Context) error {
 		mt940Path := filepath.Join(mt940Dir(), tempBase+".mt940")
 
 		if err := saveUploadedFile(file, pdfPath); err != nil {
+			log.Printf("upload: save failed for %s: %v", file.Filename, err)
 			result.Error = err.Error()
 			results = append(results, result)
 			continue
 		}
 
 		if err := runConversion(pdfPath, mt940Path); err != nil {
+			log.Printf("upload: conversion failed for %s: %v", file.Filename, err)
 			result.Error = err.Error()
 			results = append(results, result)
 			continue
@@ -155,11 +178,13 @@ func uploadHandler(c echo.Context) error {
 		finalPDFPath := filepath.Join(statementDir(), finalBase+".pdf")
 		finalMT940Path := filepath.Join(mt940Dir(), finalBase+".mt940")
 		if err := os.Rename(pdfPath, finalPDFPath); err != nil {
+			log.Printf("upload: rename pdf failed %s -> %s: %v", pdfPath, finalPDFPath, err)
 			result.Error = err.Error()
 			results = append(results, result)
 			continue
 		}
 		if err := os.Rename(mt940Path, finalMT940Path); err != nil {
+			log.Printf("upload: rename mt940 failed %s -> %s: %v", mt940Path, finalMT940Path, err)
 			result.Error = err.Error()
 			results = append(results, result)
 			continue
@@ -167,6 +192,7 @@ func uploadHandler(c echo.Context) error {
 
 		result.PDFPath = finalPDFPath
 		result.MT940Path = finalMT940Path
+		log.Printf("upload: stored %s -> %s", result.PDFPath, result.MT940Path)
 		results = append(results, result)
 	}
 
@@ -244,6 +270,7 @@ func deleteHandler(c echo.Context) error {
 	if base == "" || strings.Contains(base, "/") || strings.Contains(base, "\\") {
 		return c.String(http.StatusBadRequest, "invalid base name")
 	}
+	log.Printf("delete: base=%s", base)
 
 	pdfPath := filepath.Join(statementDir(), base+".pdf")
 	mt940Path := filepath.Join(mt940Dir(), base+".mt940")
@@ -413,6 +440,74 @@ func parseYear(raw string) (int, error) {
 		return 2000 + year, nil
 	}
 	return 1900 + year, nil
+}
+
+type nbpRateResult struct {
+	Mid  float64
+	Date string
+	Err  error
+}
+
+func statementDateFromBase(base string) string {
+	if len(base) < 10 {
+		return ""
+	}
+	date := base[:10]
+	if !datePattern.MatchString(date) {
+		return ""
+	}
+	return date
+}
+
+var datePattern = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+
+func fetchNBPRateCached(cache map[string]nbpRateResult, date string) nbpRateResult {
+	if cached, ok := cache[date]; ok {
+		return cached
+	}
+	result := fetchNBPRate(date)
+	cache[date] = result
+	return result
+}
+
+func fetchNBPRate(date string) nbpRateResult {
+	url := fmt.Sprintf("https://api.nbp.pl/api/exchangerates/rates/a/usd/%s/?format=json", date)
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nbpRateResult{Err: err}
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "rate-differences/1.0 (+local)")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nbpRateResult{Err: err}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nbpRateResult{Err: fmt.Errorf("nbp http %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))}
+	}
+
+	var payload struct {
+		Code  string `json:"code"`
+		Rates []struct {
+			EffectiveDate string  `json:"effectiveDate"`
+			Mid           float64 `json:"mid"`
+		} `json:"rates"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nbpRateResult{Err: err}
+	}
+	if len(payload.Rates) == 0 {
+		return nbpRateResult{Err: fmt.Errorf("nbp empty rates")}
+	}
+	return nbpRateResult{
+		Mid:  payload.Rates[0].Mid,
+		Date: payload.Rates[0].EffectiveDate,
+	}
 }
 
 func writeJSON(c echo.Context, payload any) error {

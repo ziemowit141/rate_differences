@@ -164,6 +164,12 @@
   color: #6c7a86;
 }
 
+.file-rate {
+  margin-top: 8px;
+  color: #3b4b56;
+  font-size: 0.9rem;
+}
+
 .pill {
   background: #22272b;
   color: #f8f0e6;

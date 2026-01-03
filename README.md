@@ -43,6 +43,8 @@ Fetch transactions (default reads `cmd/mt940api/data/mt940s/*.mt940`):
 curl -s http://localhost:8080/transactions
 ```
 
+The API response now includes NBP USD rate (`nbp_rate`) for the statement date (requires internet access).
+
 Upload PDFs (multipart form field `files[]`):
 
 ```bash
