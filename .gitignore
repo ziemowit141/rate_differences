@@ -12,3 +12,8 @@ venv/
 .swift-bin/
 .DS_Store
 *.log
+bin/
+*.exe
+*.out
+*.test
+*.prof
